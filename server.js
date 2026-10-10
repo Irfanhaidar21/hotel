@@ -1,9 +1,13 @@
 require('dotenv').config();
 const express = require('express');
+const cors = require('cors');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const Razorpay = require('razorpay');
+const mysql = require('mysql2');
+const { initializeApp, cert, getApps } = require('firebase-admin/app');
+const { getMessaging } = require('firebase-admin/messaging');
 
 // Built-in menu to prevent missing module errors
 const MENU = {
@@ -15,6 +19,8 @@ const MENU = {
 };
 
 const PORT = process.env.PORT || 3000;
+const ANDROID_CHANNEL_ID = 'new_messages_channel';
+
 const KEY_ID = (process.env.RAZORPAY_KEY_ID || '').trim();
 const KEY_SECRET = (process.env.RAZORPAY_KEY_SECRET || '').trim();
 const WEBHOOK_SECRET = (process.env.RAZORPAY_WEBHOOK_SECRET || '').trim();
@@ -29,6 +35,102 @@ const safeEq = (a, b) => {
   const x = Buffer.from(String(a)), y = Buffer.from(String(b));
   return x.length === y.length && crypto.timingSafeEqual(x, y);
 };
+
+// ============================================================
+// STARTUP CHECK & FIREBASE ADMIN SETUP
+// ============================================================
+console.log('ENV check:', {
+    DB_HOST: !!process.env.DB_HOST,
+    DB_USER: !!process.env.DB_USER,
+    DB_PASS: !!process.env.DB_PASS,
+    DB_NAME: !!process.env.DB_NAME,
+    DB_PORT: !!process.env.DB_PORT,
+    FIREBASE_SERVICE_ACCOUNT: !!process.env.FIREBASE_SERVICE_ACCOUNT,
+    SECRET_FILE: fs.existsSync('/etc/secrets/firebase.json')
+});
+
+let messaging = null;
+
+function loadServiceAccount() {
+    let sa;
+    const secretPath = '/etc/secrets/firebase.json';
+
+    if (fs.existsSync(secretPath)) {
+        console.log('Firebase: secret file vapraay che');
+        sa = JSON.parse(fs.readFileSync(secretPath, 'utf8'));
+    } else {
+        let raw = process.env.FIREBASE_SERVICE_ACCOUNT;
+        if (!raw) {
+            throw new Error('Secret file ane FIREBASE_SERVICE_ACCOUNT banne nathi');
+        }
+        console.log('Firebase: env variable vapraay che');
+        raw = raw.trim();
+
+        if ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))) {
+            raw = raw.slice(1, -1);
+        }
+        if (!raw.startsWith('{')) {
+            raw = Buffer.from(raw, 'base64').toString('utf8');
+        }
+        sa = JSON.parse(raw);
+    }
+
+    if (!sa.private_key || !sa.client_email || !sa.project_id) {
+        throw new Error('JSON ma private_key / client_email / project_id nathi');
+    }
+
+    sa.private_key = String(sa.private_key).replace(/\\n/g, '\n');
+
+    if (!sa.private_key.includes('BEGIN PRIVATE KEY')) {
+        throw new Error('private_key format khotu che');
+    }
+    return sa;
+}
+
+try {
+    const serviceAccount = loadServiceAccount();
+    if (!getApps().length) {
+        initializeApp({
+            credential: cert(serviceAccount)
+        });
+    }
+    messaging = getMessaging();
+    console.log('Firebase Admin initialized successfully! 🔥');
+} catch (error) {
+    console.error('Firebase initialization error:', error.message);
+}
+
+// ============================================================
+// MYSQL POOL & TABLE CREATION
+// ============================================================
+const pool = mysql.createPool({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASS,
+    database: process.env.DB_NAME || 'defaultdb',
+    port: Number(process.env.DB_PORT) || 3306,
+    ssl: { rejectUnauthorized: false },
+    waitForConnections: true,
+    connectionLimit: 5,
+    enableKeepAlive: true
+});
+
+pool.query(`
+    CREATE TABLE IF NOT EXISTS messages (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        subject VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+`, (err) => {
+    if (err) {
+        console.error('Database/Table error:', err.code, err.message || '');
+        return;
+    }
+    console.log('Connected to MySQL & Messages table ready!');
+});
 
 /* ---------- durable local order store (atomic JSON file) ---------- */
 const DB_FILE = path.join(__dirname, 'data', 'orders.json');
@@ -108,6 +210,7 @@ setInterval(retryPending, 60 * 1000);
 
 /* ---------- app ---------- */
 const app = express();
+app.use(cors());
 app.set('trust proxy', 1);
 
 // Webhook needs the RAW body for signature check, so it is registered before express.json()
@@ -135,9 +238,138 @@ function limiter(req, res, next) {
   next();
 }
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok', razorpayKeys: KEYS_OK, ordersApi: ORDERS_API_URL || 'not set (local only)' }));
+// ============================================================
+// API ROUTES
+// ============================================================
+app.get('/api/health', (req, res) => res.json({ 
+    status: 'ok', 
+    razorpayKeys: KEYS_OK, 
+    firebase: !!messaging,
+    ordersApi: ORDERS_API_URL || 'not set (local only)' 
+}));
+
 app.get('/api/menu', (req, res) => res.json({ success: true, menu: MENU }));
 
+// Messages MySQL & FCM Push Notification Routes
+app.get('/api/messages', (req, res) => {
+    pool.query('SELECT * FROM messages ORDER BY id DESC', (err, results) => {
+        if (err) return res.status(500).json({ success: false, error: err.message });
+        res.json({ success: true, data: results });
+    });
+});
+
+app.get('/api/messages/:id', (req, res) => {
+    pool.query('SELECT * FROM messages WHERE id = ?', [req.params.id], (err, results) => {
+        if (err) return res.status(500).json({ success: false, error: err.message });
+        if (results.length === 0) {
+            return res.status(404).json({ success: false, message: 'Record not found' });
+        }
+        res.json({ success: true, data: results[0] });
+    });
+});
+
+app.post('/api/messages', async (req, res) => {
+    const { name, email, subject, message } = req.body;
+
+    if (!name || !email || !subject || !message) {
+        return res.status(400).json({
+            success: false,
+            message: 'name, email, subject and message are required'
+        });
+    }
+
+    pool.query(
+        'INSERT INTO messages (name, email, subject, message) VALUES (?, ?, ?, ?)',
+        [name, email, subject, message],
+        async (err, results) => {
+            if (err) return res.status(500).json({ success: false, error: err.message });
+
+            const insertedId = results.insertId;
+
+            if (!messaging) {
+                return res.status(201).json({
+                    success: true,
+                    message: 'Record created, but notification skipped (Firebase offline)',
+                    insertedId,
+                    notificationSent: false
+                });
+            }
+
+            try {
+                await messaging.send({
+                    topic: 'new_messages',
+                    notification: {
+                        title: 'New Message Received',
+                        body: `${name}: ${subject}`
+                    },
+                    android: {
+                        priority: 'high',
+                        ttl: 3600 * 1000,
+                        notification: {
+                            channelId: ANDROID_CHANNEL_ID,
+                            priority: 'high',
+                            defaultSound: true,
+                            defaultVibrateTimings: true,
+                            visibility: 'public',
+                            notificationCount: 1
+                        }
+                    },
+                    data: {
+                        type: 'new_message',
+                        messageId: String(insertedId),
+                        name: String(name),
+                        email: String(email),
+                        subject: String(subject)
+                    }
+                });
+
+                return res.status(201).json({
+                    success: true,
+                    message: 'Thank you! Your message has been sent successfully. I will get back to you soon',
+                    insertedId,
+                    notificationSent: true
+                });
+            } catch (fcmError) {
+                console.error('FCM error:', fcmError.message);
+                return res.status(201).json({
+                    success: true,
+                    message: 'Record created but notification failed',
+                    insertedId,
+                    notificationSent: false,
+                    notificationError: fcmError.message
+                });
+            }
+        }
+    );
+});
+
+app.put('/api/messages/:id', (req, res) => {
+    const { name, email, subject, message } = req.body;
+
+    pool.query(
+        'UPDATE messages SET name = ?, email = ?, subject = ?, message = ? WHERE id = ?',
+        [name, email, subject, message, req.params.id],
+        (err, results) => {
+            if (err) return res.status(500).json({ success: false, error: err.message });
+            if (results.affectedRows === 0) {
+                return res.status(404).json({ success: false, message: 'Record not found' });
+            }
+            res.json({ success: true, message: 'Record updated successfully' });
+        }
+    );
+});
+
+app.delete('/api/messages/:id', (req, res) => {
+    pool.query('DELETE FROM messages WHERE id = ?', [req.params.id], (err, results) => {
+        if (err) return res.status(500).json({ success: false, error: err.message });
+        if (results.affectedRows === 0) {
+            return res.status(404).json({ success: false, message: 'Record not found' });
+        }
+        res.json({ success: true, message: 'Record deleted successfully' });
+    });
+});
+
+// Razorpay Payment Routes
 app.post('/api/payments/create-order', limiter, wrap(async (req, res) => {
   if (!KEYS_OK) throw bad('Razorpay keys are not set. Open the .env file, paste your Key ID and Secret, then restart the server.', 503);
   const c = req.body.customer || {};
@@ -199,9 +431,10 @@ app.use((err, req, res, next) => {
   res.status(err.statusCode || 500).json({ success: false, error: err.statusCode ? err.message : 'Something went wrong. Please try again.' });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n  PARADISE running  ->  http://localhost:${PORT}`);
   console.log('  Razorpay keys     : ' + (KEYS_OK ? 'OK (' + (KEY_ID.startsWith('rzp_live') ? 'LIVE' : 'TEST') + ' mode)' : 'NOT SET - edit .env'));
-  console.log('  Orders API        : ' + (ORDERS_API_URL || 'not set - orders saved in data/orders.json only') + '\n');
+  console.log('  Orders API        : ' + (ORDERS_API_URL || 'not set - orders saved in data/orders.json only'));
+  console.log('  Firebase Messaging: ' + (messaging ? 'CONNECTED' : 'OFFLINE') + '\n');
   retryPending();
 });
