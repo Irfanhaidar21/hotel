@@ -13,7 +13,7 @@ const { getMessaging } = require('firebase-admin/messaging');
 const MENU = {
   'chicken-biryani': { 
     name: 'Chicken Biryani', 
-    price: 210, 
+    price: 1, 
     category: 'biryani', 
     emoji: '🍗', 
     image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=600&q=80',
@@ -21,7 +21,7 @@ const MENU = {
   },
   'mutton-biryani': { 
     name: 'Mutton Biryani', 
-    price: 253, 
+    price: 2, 
     category: 'biryani', 
     emoji: '🍖', 
     image: 'https://images.unsplash.com/photo-1633945274405-b6c8069047b0?auto=format&fit=crop&w=600&q=80',
@@ -29,7 +29,7 @@ const MENU = {
   },
   'chicken-family-pack': { 
     name: 'Chicken Family Pack', 
-    price: 552, 
+    price: 3, 
     category: 'biryani', 
     emoji: '🍛', 
     image: 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?auto=format&fit=crop&w=600&q=80',
@@ -37,7 +37,7 @@ const MENU = {
   },
   'mutton-family-pack': { 
     name: 'Mutton Family Pack', 
-    price: 1576, 
+    price: 2, 
     category: 'biryani', 
     emoji: '🍛', 
     image: 'https://images.unsplash.com/photo-1633945274405-b6c8069047b0?auto=format&fit=crop&w=600&q=80',
@@ -45,7 +45,7 @@ const MENU = {
   },
   'special-chicken-biryani': { 
     name: 'Special Chicken Biryani', 
-    price: 337, 
+    price: 2, 
     category: 'biryani', 
     emoji: '🍗', 
     image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=600&q=80',
@@ -53,7 +53,7 @@ const MENU = {
   },
   'special-mutton-biryani': { 
     name: 'Special Mutton Biryani', 
-    price: 351, 
+    price: 3, 
     category: 'biryani', 
     emoji: '🍖', 
     image: 'https://images.unsplash.com/photo-1633945274405-b6c8069047b0?auto=format&fit=crop&w=600&q=80',
@@ -61,7 +61,7 @@ const MENU = {
   },
   'supreme-chicken-biryani': { 
     name: 'Supreme Chicken Biryani', 
-    price: 784, 
+    price: 1, 
     category: 'biryani', 
     emoji: '👑', 
     image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=600&q=80',
@@ -85,7 +85,7 @@ const MENU = {
   },
   'veg-biryani': { 
     name: 'Veg. Biryani', 
-    price: 154, 
+    price: 175, 
     category: 'biryani', 
     emoji: '🥕', 
     image: 'https://images.unsplash.com/photo-1645177628172-a94c1f96e6db?auto=format&fit=crop&w=600&q=80',
