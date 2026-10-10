@@ -250,6 +250,16 @@ app.get('/api/health', (req, res) => res.json({
 
 app.get('/api/menu', (req, res) => res.json({ success: true, menu: MENU }));
 
+// ============================================================
+// ALL ORDERS API (Badha orders ek sathe get karva mate)
+// ============================================================
+app.get('/api/orders', (req, res) => {
+  res.json({ 
+    success: true, 
+    orders: Object.values(db).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)) 
+  });
+});
+
 // Messages MySQL & FCM Push Notification Routes
 app.get('/api/messages', (req, res) => {
     pool.query('SELECT * FROM messages ORDER BY id DESC', (err, results) => {
@@ -412,6 +422,7 @@ app.post('/api/payments/verify', limiter, wrap(async (req, res) => {
     o.payment.status = 'failed'; o.status = 'payment_failed'; persist();
     throw bad('Payment signature verification failed.');
   }
+  
   await markPaid(o, razorpayPaymentId);
   res.json({
     success: true, orderId,
