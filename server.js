@@ -4,7 +4,15 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const Razorpay = require('razorpay');
-const MENU = require('./menu');
+
+// Built-in menu to prevent missing module errors
+const MENU = {
+  item1: { name: "Chicken Biryani", price: 250 },
+  item2: { name: "Paneer Tikka", price: 200 },
+  item3: { name: "Veg Fried Rice", price: 180 },
+  item4: { name: "Butter Naan", price: 40 },
+  item5: { name: "Coke (500ml)", price: 60 }
+};
 
 const PORT = process.env.PORT || 3000;
 const KEY_ID = (process.env.RAZORPAY_KEY_ID || '').trim();
@@ -193,7 +201,7 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`\n  PARADISE running  ->  http://localhost:${PORT}`);
-  console.log('  Razorpay keys    : ' + (KEYS_OK ? 'OK (' + (KEY_ID.startsWith('rzp_live') ? 'LIVE' : 'TEST') + ' mode)' : 'NOT SET - edit .env'));
-  console.log('  Orders API       : ' + (ORDERS_API_URL || 'not set - orders saved in data/orders.json only') + '\n');
+  console.log('  Razorpay keys     : ' + (KEYS_OK ? 'OK (' + (KEY_ID.startsWith('rzp_live') ? 'LIVE' : 'TEST') + ' mode)' : 'NOT SET - edit .env'));
+  console.log('  Orders API        : ' + (ORDERS_API_URL || 'not set - orders saved in data/orders.json only') + '\n');
   retryPending();
 });
