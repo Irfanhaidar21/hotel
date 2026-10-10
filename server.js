@@ -9,13 +9,240 @@ const mysql = require('mysql2');
 const { initializeApp, cert, getApps } = require('firebase-admin/app');
 const { getMessaging } = require('firebase-admin/messaging');
 
-// Built-in menu to prevent missing module errors
+// Authoritative server-side rich menu items with prices, categories, emojis, and descriptions
 const MENU = {
-  item1: { name: "Chicken Biryani", price: 250 },
-  item2: { name: "Paneer Tikka", price: 200 },
-  item3: { name: "Veg Fried Rice", price: 180 },
-  item4: { name: "Butter Naan", price: 40 },
-  item5: { name: "Coke (500ml)", price: 60 }
+  'chicken-biryani': { 
+    name: 'Chicken Biryani', 
+    price: 210, 
+    category: 'biryani', 
+    emoji: '🍗', 
+    image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=600&q=80',
+    description: 'Tender chicken pieces marinated in secret royal spices, layered with aromatic basmati rice.' 
+  },
+  'mutton-biryani': { 
+    name: 'Mutton Biryani', 
+    price: 253, 
+    category: 'biryani', 
+    emoji: '🍖', 
+    image: 'https://images.unsplash.com/photo-1633945274405-b6c8069047b0?auto=format&fit=crop&w=600&q=80',
+    description: 'Juicy succulent pieces of tender mutton cooked traditionally with long-grain basmati rice.' 
+  },
+  'chicken-family-pack': { 
+    name: 'Chicken Family Pack', 
+    price: 552, 
+    category: 'biryani', 
+    emoji: '🍛', 
+    image: 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?auto=format&fit=crop&w=600&q=80',
+    description: 'Generous serving of our legendary Chicken Biryani, perfect for sharing with family and friends.' 
+  },
+  'mutton-family-pack': { 
+    name: 'Mutton Family Pack', 
+    price: 1576, 
+    category: 'biryani', 
+    emoji: '🍛', 
+    image: 'https://images.unsplash.com/photo-1633945274405-b6c8069047b0?auto=format&fit=crop&w=600&q=80',
+    description: 'Grand celebration pack of our signature Mutton Biryani loaded with rich flavors and dry fruits.' 
+  },
+  'special-chicken-biryani': { 
+    name: 'Special Chicken Biryani', 
+    price: 337, 
+    category: 'biryani', 
+    emoji: '🍗', 
+    image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=600&q=80',
+    description: 'Extra portion of boneless chicken chunks cooked with rich saffron-infused basmati rice.' 
+  },
+  'special-mutton-biryani': { 
+    name: 'Special Mutton Biryani', 
+    price: 351, 
+    category: 'biryani', 
+    emoji: '🍖', 
+    image: 'https://images.unsplash.com/photo-1633945274405-b6c8069047b0?auto=format&fit=crop&w=600&q=80',
+    description: 'Chef special rich preparation of tender lamb meat blended with aromatic herbs and spices.' 
+  },
+  'supreme-chicken-biryani': { 
+    name: 'Supreme Chicken Biryani', 
+    price: 784, 
+    category: 'biryani', 
+    emoji: '👑', 
+    image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=600&q=80',
+    description: 'The ultimate royal feast featuring premium chicken cuts, rich ghee, and dry fruits.' 
+  },
+  'supreme-mutton-biryani': { 
+    name: 'Supreme Mutton Biryani', 
+    price: 819, 
+    category: 'biryani', 
+    emoji: '👑', 
+    image: 'https://images.unsplash.com/photo-1633945274405-b6c8069047b0?auto=format&fit=crop&w=600&q=80',
+    description: 'An unmatched masterpiece of royal Nizami heritage with premium tender mutton and rich spices.' 
+  },
+  'egg-biryani': { 
+    name: 'Egg Biryani', 
+    price: 154, 
+    category: 'biryani', 
+    emoji: '🥚', 
+    image: 'https://images.unsplash.com/photo-1633945274405-b6c8069047b0?auto=format&fit=crop&w=600&q=80',
+    description: 'Boiled farm-fresh eggs tossed in spicy masala and layered with fragrant basmati rice.' 
+  },
+  'veg-biryani': { 
+    name: 'Veg. Biryani', 
+    price: 154, 
+    category: 'biryani', 
+    emoji: '🥕', 
+    image: 'https://images.unsplash.com/photo-1645177628172-a94c1f96e6db?auto=format&fit=crop&w=600&q=80',
+    description: 'Assorted fresh garden vegetables cooked with aromatic herbs, basmati rice, and mint.' 
+  },
+  'chilli-chicken': { 
+    name: 'Chilli Chicken', 
+    price: 264, 
+    category: 'starters', 
+    emoji: '🌶️', 
+    image: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=600&q=80',
+    description: 'Crispy fried chicken chunks tossed with bell peppers, green chillies, and tangy soy sauce.' 
+  },
+  'chicken-65': { 
+    name: 'Chicken 65', 
+    price: 264, 
+    category: 'starters', 
+    emoji: '🍗', 
+    image: 'https://images.unsplash.com/photo-1610057099431-d7a8e57b3348?auto=format&fit=crop&w=600&q=80',
+    description: 'South India’s legendary spicy, deep-fried chicken appetizer tempered with curry leaves.' 
+  },
+  'pepper-chicken': { 
+    name: 'Pepper Chicken', 
+    price: 264, 
+    category: 'starters', 
+    emoji: '🫚', 
+    image: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=600&q=80',
+    description: 'Juicy chicken pieces stir-fried with crushed black pepper, garlic, and onions.' 
+  },
+  'paneer-65': { 
+    name: 'Paneer 65', 
+    price: 196, 
+    category: 'starters', 
+    emoji: '🧀', 
+    image: 'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?auto=format&fit=crop&w=600&q=80',
+    description: 'Crispy cottage cheese cubes tossed in spicy yogurt-based South Indian seasoning.' 
+  },
+  'veg-manchurian': { 
+    name: 'Veg. Manchurian', 
+    price: 189, 
+    category: 'starters', 
+    emoji: '🥦', 
+    image: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=600&q=80',
+    description: 'Savory vegetable dumplings deep-fried and simmered in a flavorful garlic-soy sauce.' 
+  },
+  'chicken-tikka-kebab': { 
+    name: 'Chicken Tikka Kebab', 
+    price: 243, 
+    category: 'kebabs', 
+    emoji: '🍢', 
+    image: 'https://images.unsplash.com/photo-1599487488170-d33199eae26f?auto=format&fit=crop&w=600&q=80',
+    description: 'Boneless chicken chunks marinated in yogurt and spices, grilled to smoky perfection in a tandoor.' 
+  },
+  'tandoori-chicken-half': { 
+    name: 'Tandoori Chicken (Half)', 
+    price: 243, 
+    category: 'kebabs', 
+    emoji: '🍗', 
+    image: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=600&q=80',
+    description: 'Classic bone-in chicken marinated in traditional red spices and roasted in a clay oven.' 
+  },
+  'tandoori-chicken-full': { 
+    name: 'Tandoori Chicken (Full)', 
+    price: 379, 
+    category: 'kebabs', 
+    emoji: '🍗', 
+    image: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=600&q=80',
+    description: 'Whole chicken roasted in the tandoor with smoky charcoal flavors and aromatic spices.' 
+  },
+  'chicken-reshmi-kebab': { 
+    name: 'Chicken Reshmi Kebab', 
+    price: 243, 
+    category: 'kebabs', 
+    emoji: '🍢', 
+    image: 'https://images.unsplash.com/photo-1599487488170-d33199eae26f?auto=format&fit=crop&w=600&q=80',
+    description: 'Extremely tender and melt-in-mouth chicken kebabs marinated in cream, cashews, and mild spices.' 
+  },
+  'chicken-garlic-kebab': { 
+    name: 'Chicken Garlic Kebab', 
+    price: 243, 
+    category: 'kebabs', 
+    emoji: '🧄', 
+    image: 'https://images.unsplash.com/photo-1599487488170-d33199eae26f?auto=format&fit=crop&w=600&q=80',
+    description: 'Juicy chicken pieces infused with rich garlic flavor, grilled over glowing embers.' 
+  },
+  'butter-chicken-boneless': { 
+    name: 'Butter Chicken Boneless', 
+    price: 246, 
+    category: 'curries', 
+    emoji: '🍲', 
+    image: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?auto=format&fit=crop&w=600&q=80',
+    description: 'Tender tandoori chicken pieces simmered in a rich, buttery, and slightly sweet tomato gravy.' 
+  },
+  'mutton-rogan-josh': { 
+    name: 'Mutton Rogan Josh', 
+    price: 320, 
+    category: 'curries', 
+    emoji: '🥘', 
+    image: 'https://images.unsplash.com/photo-1545247181-550b74f30d35?auto=format&fit=crop&w=600&q=80',
+    description: 'Slow-cooked succulent mutton in an aromatic Kashmiri red chili and herb-infused gravy.' 
+  },
+  'paneer-butter-masala': { 
+    name: 'Paneer Butter Masala', 
+    price: 220, 
+    category: 'curries', 
+    emoji: '🧀', 
+    image: 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?auto=format&fit=crop&w=600&q=80',
+    description: 'Soft cottage cheese cubes cooked in a velvety, rich tomato and cashew-nut gravy.' 
+  },
+  'tandoori-roti': { 
+    name: 'Tandoori Roti', 
+    price: 40, 
+    category: 'breads', 
+    emoji: '🫓', 
+    image: 'https://images.unsplash.com/photo-1565557623262-b51c2513a641?auto=format&fit=crop&w=600&q=80',
+    description: 'Traditional whole wheat flatbread baked fresh inside a clay tandoor oven.' 
+  },
+  'butter-naan': { 
+    name: 'Butter Naan', 
+    price: 55, 
+    category: 'breads', 
+    emoji: '🫓', 
+    image: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=600&q=80',
+    description: 'Soft leavened refined flour flatbread brushed generously with melted butter.' 
+  },
+  'rumalli-roti': { 
+    name: 'Rumalli Roti', 
+    price: 60, 
+    category: 'breads', 
+    emoji: '🫓', 
+    image: 'https://images.unsplash.com/photo-1565557623262-b51c2513a641?auto=format&fit=crop&w=600&q=80',
+    description: 'Thin, soft, handkerchief-like folded flatbread cooked on an inverted tawa.' 
+  },
+  'double-ka-meetha': { 
+    name: 'Double Ka Meetha', 
+    price: 173, 
+    category: 'desserts', 
+    emoji: '🍮', 
+    image: 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=600&q=80',
+    description: 'Hyderabadi royal bread pudding fried in pure ghee, soaked in rich saffron milk and nuts.' 
+  },
+  'khubani-ka-meetha': { 
+    name: 'Khubani Ka Meetha', 
+    price: 190, 
+    category: 'desserts', 
+    emoji: '🍑', 
+    image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=600&q=80',
+    description: 'Traditional Hyderabadi sweet made from dried apricots served with fresh cream.' 
+  },
+  'coke-500ml': { 
+    name: 'Coke (500ml)', 
+    price: 60, 
+    category: 'desserts', 
+    emoji: '🥤', 
+    image: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&w=600&q=80',
+    description: 'Chilled refreshing carbonated soft drink to complement your heavy meal.' 
+  }
 };
 
 const PORT = process.env.PORT || 3000;
